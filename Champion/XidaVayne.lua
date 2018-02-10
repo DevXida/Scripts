@@ -1,10 +1,15 @@
 
------SCRIPT CONFIG-------
-local comboKey  = 0x20 --- // SPACEBAR
-local harassKey = 0x43 --- // C
-local clearKey  = 0x56 --- // V
+------MAIN KEYS-------
+local comboKey   = 0x20 --- // SPACEBAR
+local harassKey  = 0x43 --- // C
+local clearKey   = 0x56 --- // V
+local lasthitKey = 0x58 --- // X
+----ADDITIONAL KEYS----
+local insecKey   = 0x54 --- // T
 
 require 'GeometryLib'
+
+Vayne = {}
 
 function OnLoad()
 
@@ -19,7 +24,7 @@ function Vayne:Init()
     slot = myHero.spellbook:Spell(SpellSlot.Q),
     ready = function() return myHero.spellbook:CanUseSpell(0) == 0 end,
     range = 300,
-    tumblePos = nil
+    tumblePositions = {}
   }
 
   self.W = {
@@ -29,7 +34,8 @@ function Vayne:Init()
   self.E = {
       slot = myHero.spellbook:Spell(SpellSlot.E),
       ready = function() return myHero.spellbook:CanUseSpell(0) == 0 end,
-      range = 550
+      range = 550,
+      condemnTable = {},
     }
 
     self.R = {
@@ -42,7 +48,7 @@ function Vayne:Init()
       AddEvent(Events.OnDraw, function() self:OnDraw() end)
       AddEvent(Events.OnBasicAttack, function() self:OnBasicAttack() end)
       AddEvent(Events.OnBuffGain, function(Obj, Buff) self:OnBuffGain(Obj, Buff) end)
-    	AddEvent(Events.OnBuffLost, function(Obj, Buff) self:OnBuffLost(Obj, Buff) end)
+      AddEvent(Events.OnBuffLost, function(Obj, Buff) self:OnBuffLost(Obj, Buff) end)
 
   PrintChat("<b><font color=\"#C70039\">Xida Vayne</font></b> <font color=\"#ffffff\">Loaded. Enjoy the mayhem</font>")
 end
@@ -54,37 +60,45 @@ function Vayne:OnTick()
   if IsKeyDown(comboKey) then
 
     if self.R.ready() then
-      for k, v in pairs(ObjectManager:GetEnemyHeroes()) do
-      -- Need autoattack damage
+      for k, v in pairs(self:GetEnemies(900)) do
+          local autoattackDamage = myHero.characterIntermediate.baseAttackDamage
+
+          if v.health <= autoattackDamage * 5 and v.health >= autoattackDamage * 3 then
+            myHero.spellbook:CastSpell(SpellSlot.R, myHero.networkId)
+          end
       end
     end
   end
 
+
   if self.E.ready() then
      for k, v in pairs(ObjectManager:GetEnemyHeroes()) do
-      if v.isValid and self:GetDistance(v, myHero) <= self.E.range then
+      if v.isVisible
+      and not v.isDead
+      and v.isValid
+      and self:GetDistance(myHero.position, v.position) < 550 then
 
-        targetPos = Vector(v.position.x, v.position.y, v.position.z)
-        path = v.aiManagerClient.navPath.paths[1]
 
-        positionAfter = Vector(targetPos + (targetPos - path)):normalized() * v.characterIntermediate.movementSpeed * 0.425
+        local targetPos = v.position
+        local path = v.aiManagerClient.navPath
 
+        local positionAfter = targetPos + (targetPos - Vector(path[2])):normalized() * v.characterIntermediate.movementSpeed * 0.5
           for i = 15, 475, 75 do
-              pos1 = Vector(targetPos + (targetPos - myHero.position):normalized() * i)
-              pos2 = Vector(positionAfter + (positionAfter - myHero.position):normalized() * i)
 
-              if not v.aiManagerClient.navPath.isMoving then
-                pos2 = nil
+             local pos1 = Vector(v.position + (v.position - myHero.position):normalized() * i)
+                PrintChat("1")
+              --local pos2 = positionAfter + (positionAfter - myHero.position):normalized() * i
+               PrintChat("2")
+              if not path.isMoving then
+                --pos2 = nil
               end
 
-              if self:IsWall(pos1) and self:IsWall(pos2) then
-                DrawHandler:Circle3D(pos1, 100, self:Hex(255, 0, 255, 0))
-                DrawHandler:Circle3D(pos2, 50, self:Hex(255, 0, 255, 0))
+              if self:IsWall(pos1)  then
+                DrawHandler:Circle3D(pos1, 100, 0xff00ffff)
+                --DrawHandler:Circle3D(pos2, 50, self:Hex(255, 0, 255, 0))
 
                 myHero.spellbook:CastSpell(E, v.networkId)
-              else
-                 DrawHandler:Circle3D(pos1, i / 10, self:Hex(255, 255, 0, 0))
-                 DrawHandler:Circle3D(pos2, i / 20, self:Hex(255, 255, 0, 0))
+
               end
           end
       end
@@ -93,46 +107,157 @@ function Vayne:OnTick()
 end
 
 function Vayne:OnDraw()
-  if not self.Q.ready and self.Q.tumblePos ~= nil then
-    DrawHandler:Circle3D(self.Q.tumblePos, 60, self:Hex(255, 0, 204, 255))
-  end
-end
+  if self.Q.tumblePositions ~= nil then
 
-function Vayne:OnBasicAttack(Source, Spell)
-  if Source.networkId ~= myHero.networkId
-    or not self.Q.ready then return end
-
-  if IsKeyDown(harassKey) or IsKeyDown(comboKey) then
-  for k, v in pairs(ObjectManager:GetEnemyHeroes()) do
-      if v.isValid and self:GetDistance(v, myHero) <= 800 then
-        self:CastQ(v, true)
-      end
+    for k, v in pairs(self.Q.tumblePositions) do
+      DrawHandler:Circle3D(D3DXVECTOR3(v.x, v.y, v.z), 30, 0xff00ffff)
     end
   end
 end
 
-function Vayne:CastQ(target, toEPosition)
-  toEPosition = toEPosition or false
+function Vayne:OnBasicAttack(Source, Spell)
 
+
+  if not self.Q.ready then return end
+
+  if IsKeyDown(harassKey) or IsKeyDown(comboKey) then
+  for k, v in pairs(self:GetEnemies(900)) do
+        self:CastQ(v, true)
+    end
+  end
+
+  if IsKeyDown(lasthitKey) or IsKeyDown(clearKey) then
+
+  end
+end
+
+function Vayne:CastQ(target, toEPosition)
+  local toEPosition = toEPosition or false
+  local tumblePosition = nil
+  self.Q.tumblePositions = {}
+
+  --local wallPos = self:GetWallPosition(target, 140)
+  --local qToEPos = self:GetWallPosition(target, 200)
+  local kitePos = self:GetKitePosition(target)
+
+  local targetPosition = Vector(target.position)
+  local myPosition = Vector(myHero.position)
+
+  if wallPos then
+     PrintChat("EH")
+      tumblePosition = wallPos
+
+  elseif self.E.ready and toEPosition and qToEPos then
+       PrintChat("???")
+
+      local pos = targetPosition + (targetPosition - qToEPos):normalized() * 100
+      if self:GetDistance(myHero.position, pos) < self.Q.range then
+          tumblePosition = pos
+      end
+
+
+  elseif self:GetDistance(myPosition, targetPosition) > myHero.characterIntermediate.attackRange + 70 then
+     PrintChat("?????")
+      tumblePosition = targetPosition
+
+  elseif kitePos ~= nil then
+      tumblePosition = kitePos
+  end
+
+
+  if tumblePosition == nil then return end
+   myHero.spellbook:CastSpell(SpellSlot.Q, D3DXVECTOR3(tumblePosition.x, tumblePosition.y, tumblePosition.z))
 end
 
 function Vayne:OnBuffGain(Obj, Buff)
 
-  if string.lower(Buff.name) ~= "vaynetumblefade" or Obj ~= myHero then return end
+  if Obj.networkId ~= myHero.networkId or string.lower(Buff.name) ~= "vaynetumblefade" then return end
   self.R.invis = true
   self.R.invisStartTick = GetTickCount()
 end
 
 function Vayne:OnBuffLost(Obj, Buff)
 
-   if string.lower(Buff.name) ~= "vaynetumblefade" or Obj ~= myHero then return end
+  if Obj.networkId ~= myHero.networkId or string.lower(Buff.name) ~= "vaynetumblefade" then return end
    self.R.invis = false
 end
 
-function Vayne:IsWall(pos)
-  flag = NavMesh:GetCollisionFlags(pos)
-    return flag == 2 or flag == 70
+function Vayne:GetWallPosition(target, range)
+    local targetPosition = target.position
+
+    for i = 0, 360, 45 do
+        local angle = i * (math.pi/180)
+        local targetRotated = D3DXVECTOR3(targetPosition.x + range, targetPosition.y, targetPosition.z)
+        local pos = self:RotateAroundPoint(targetRotated, targetPosition, angle)
+        if self:IsWall(pos) and self:GetDistance(myHero.position, pos) < range then
+            return pos
+        end
+    end
+end
+
+function Vayne:GetKitePosition(target)
+
+    local playerPos = myHero.position
+    local tPos  = target.position
+
+  for i = 0, 360, 45 do
+
+    local angle = i * (math.pi/180)
+
+    local rot = self:RotateAroundPoint(tPos, playerPos, angle)
+    local pos = Vector(playerPos + (playerPos - rot):normalized() * self.Q.range)
+    table.insert(self.Q.tumblePositions, pos)
+
+      for k,v in pairs(self:GetEnemies(900)) do
+        local dist = self:GetDistance(v.position, pos) / 2
+
+        if (dist < 350 and dist > 240) then
+           return pos
+         end
+        end
+      end
+    return nil
   end
+
+function Vayne:GetEnemies(range)
+  local t = {}
+  for k, v in pairs(ObjectManager:GetEnemyHeroes()) do
+
+      if range > self:GetDistance(myHero.position, v.position) then
+        table.insert(t, v)
+    end
+  end
+  return t
+end
+
+function Vayne:RotateAroundPoint(v1,v2, angle)
+     cos, sin = math.cos(angle), math.sin(angle)
+     x = ((v1.x - v2.x) * cos) - ((v2.z - v1.z) * sin) + v2.x
+     z = ((v2.z - v1.z) * cos) + ((v1.x - v2.x) * sin) + v2.z
+    return Vector(x or 0, v1.y or 0, z or 0)
+end
+
+function Vayne:IsWall(pos)
+  flag = NavMesh:GetCollisionFlags(pos) -- <-- BROKEN? (BUGSPLATS)
+  return flag == 2 or flag == 70
+end
+
+function Vayne:CalculPhysicDamage(target, source, dmg)
+
+  local result = nil
+  local baseArmor = target.characterIntermediate.armor
+  local Lethality = source.characterIntermediate.physicalLethality * (0.6 + 0.4 * source.experience.level / 18)
+  baseArmor = baseArmor - Lethality
+
+  if baseArmor < 0 then baseArmor = 0 end
+  if (baseArmor >= 0 ) then
+    local armorPenetration = source.characterIntermediate.percentArmorPenetration
+    local armor = baseArmor - ((armorPenetration*baseArmor) / 100)
+    result = dmg * (100 / (100 + armor))
+  end
+
+  return (result - target.attackShield)
+end
 
 function Vayne:GetDistance(p1, p2)
     return math.sqrt(self:GetDistanceSqr(p1, p2))
@@ -146,7 +271,3 @@ function Vayne:GetDistanceSqr(p1, p2)
   local dz = p1.z - p2.z
   return dx*dx + dz*dz
 end
-
-function Vayne:Hex(a,r,g,b) -- A R G B to Hex for drawings etc | Credits to Weedle
-      return format("0x%.2X%.2X%.2X%.2X",a,r,g,b)
-  end
