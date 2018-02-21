@@ -46,7 +46,7 @@ function Vayne:Init()
 
       AddEvent(Events.OnTick, function() self:OnTick() end)
       AddEvent(Events.OnDraw, function() self:OnDraw() end)
-      AddEvent(Events.OnBasicAttack, function() self:OnBasicAttack() end)
+      AddEvent(Events.OnBasicAttack, function(...) self:OnProcessAutoAttack(...) end)
       AddEvent(Events.OnBuffGain, function(Obj, Buff) self:OnBuffGain(Obj, Buff) end)
       AddEvent(Events.OnBuffLost, function(Obj, Buff) self:OnBuffLost(Obj, Buff) end)
 
@@ -85,20 +85,14 @@ function Vayne:OnTick()
         local positionAfter = targetPos + (targetPos - Vector(path[2])):normalized() * v.characterIntermediate.movementSpeed * 0.5
           for i = 15, 475, 75 do
 
-             local pos1 = Vector(v.position + (v.position - myHero.position):normalized() * i)
-                PrintChat("1")
-              --local pos2 = positionAfter + (positionAfter - myHero.position):normalized() * i
-               PrintChat("2")
-              if not path.isMoving then
-                --pos2 = nil
-              end
+             local posX = v.position.x + (v.position.x - myHero.position.x)
+             local posY = v.position.y + (v.position.y - myHero.position.y)
+             local posZ = v.position.z + (v.position.z - myHero.position.z)
+             local pos = Vector(posX, posY, posZ):normalized() * i
+             local posTrue = D3DXVECTOR3(pos.x, pos.y, pos.z)
 
-              if self:IsWall(pos1)  then
-                DrawHandler:Circle3D(pos1, 100, 0xff00ffff)
-                --DrawHandler:Circle3D(pos2, 50, self:Hex(255, 0, 255, 0))
-
-                myHero.spellbook:CastSpell(E, v.networkId)
-
+              if self:IsWall(posTrue)  then
+                DrawHandler:Circle3D(posTrue, 100, 0xff00ffff)
               end
           end
       end
@@ -115,19 +109,43 @@ function Vayne:OnDraw()
   end
 end
 
-function Vayne:OnBasicAttack(Source, Spell)
-
-
-  if not self.Q.ready then return end
-
-  if IsKeyDown(harassKey) or IsKeyDown(comboKey) then
-  for k, v in pairs(self:GetEnemies(900)) do
-        self:CastQ(v, true)
+delayedActions = {}
+function Vayne:DelayAction(func, delay, args)
+    if not delayedActionsExecuter then
+            function delayedActionsExecuter()
+                    for i, funcs in pairs(delayedActions) do
+                            if i <= RiotClock.time then
+                                    for _, f in ipairs(funcs) do
+                                            f.func(unpack(f.args or {}))
+                                    end
+                                    delayedActions[i] = nil
+                            end
+                    end
+            end
+            AddEvent(Events.OnTick , delayedActionsExecuter)
     end
-  end
+    local time = RiotClock.time + (delay or 0)
+    if delayedActions[time] then
+            table.insert(delayedActions[time], { func = func, args = args })
+    else
+            delayedActions[time] = { { func = func, args = args } }
+    end
+end
 
-  if IsKeyDown(lasthitKey) or IsKeyDown(clearKey) then
+function Vayne:OnProcessAutoAttack(sender,spell)
 
+ if sender == myHero and spell and spell.target then
+
+    if not self.Q.ready then return end
+    if IsKeyDown(harassKey) or IsKeyDown(comboKey) then
+      local delay = math.min(60/1000, NetClient.ping/1000) + 0.35 - (0.0125 * myHero.experience.level)
+
+        self:DelayAction(function() self:CastQ(spell.target, true) end, delay)
+    end
+
+    if IsKeyDown(lasthitKey) or IsKeyDown(clearKey) then
+
+    end
   end
 end
 
@@ -142,9 +160,8 @@ function Vayne:CastQ(target, toEPosition)
 
   local targetPosition = Vector(target.position)
   local myPosition = Vector(myHero.position)
-
+--[[
   if wallPos then
-     PrintChat("EH")
       tumblePosition = wallPos
 
   elseif self.E.ready and toEPosition and qToEPos then
@@ -156,7 +173,7 @@ function Vayne:CastQ(target, toEPosition)
       end
 
 
-  elseif self:GetDistance(myPosition, targetPosition) > myHero.characterIntermediate.attackRange + 70 then
+  else]]if self:GetDistance(myPosition, targetPosition) > myHero.characterIntermediate.attackRange + 70 then
      PrintChat("?????")
       tumblePosition = targetPosition
 
@@ -178,8 +195,6 @@ end
 
 function Vayne:OnBuffLost(Obj, Buff)
 
-  if Obj.networkId ~= myHero.networkId or string.lower(Buff.name) ~= "vaynetumblefade" then return end
-   self.R.invis = false
 end
 
 function Vayne:GetWallPosition(target, range)
@@ -197,27 +212,30 @@ end
 
 function Vayne:GetKitePosition(target)
 
-    local playerPos = myHero.position
-    local tPos  = target.position
+  local playerPos = myHero.position
+  local tPos  = target.position
 
-  for i = 0, 360, 45 do
+  for i = 0, 360, 22.5 do
 
-    local angle = i * (math.pi/180)
+   local angle = i * (math.pi/180)
 
-    local rot = self:RotateAroundPoint(tPos, playerPos, angle)
-    local pos = Vector(playerPos + (playerPos - rot):normalized() * self.Q.range)
-    table.insert(self.Q.tumblePositions, pos)
+   local rot = self:RotateAroundPoint(tPos, playerPos, angle)
+   local pos = Vector(playerPos + (playerPos - rot):normalized() * self.Q.range)
+   table.insert(self.Q.tumblePositions, pos)
 
-      for k,v in pairs(self:GetEnemies(900)) do
-        local dist = self:GetDistance(v.position, pos) / 2
+    for k,v in pairs(self:GetEnemies(900)) do
+        local dist = self:GetDistance(v.position, pos)
 
-        if (dist < 350 and dist > 240) then
+        if (dist < 680 and dist > 480) then
            return pos
-         end
+         elseif i >= 360 then
+           return pwHud.hudManager.activeVirtualCursorPos
         end
       end
-    return nil
-  end
+    end
+
+  return nil
+ end
 
 function Vayne:GetEnemies(range)
   local t = {}
