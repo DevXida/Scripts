@@ -50,7 +50,7 @@ function Vayne:Init()
       AddEvent(Events.OnBuffGain, function(Obj, Buff) self:OnBuffGain(Obj, Buff) end)
       AddEvent(Events.OnBuffLost, function(Obj, Buff) self:OnBuffLost(Obj, Buff) end)
 
-  PrintChat("<b><font color=\"#C70039\">Xida Vayne</font></b> <font color=\"#ffffff\">Loaded. Enjoy the mayhem</font>")
+  PrintChat("<b><font color=\"#C70039\">Xida Vayne</font></b> <font color=\"#ffffff\">Loaded.</font>")
 end
 
 function Vayne:OnTick()
@@ -69,7 +69,6 @@ function Vayne:OnTick()
       end
     end
   end
-
 
   if self.E.ready() then
      for k, v in pairs(ObjectManager:GetEnemyHeroes()) do
