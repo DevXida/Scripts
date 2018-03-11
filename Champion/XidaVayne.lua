@@ -49,6 +49,7 @@ function Vayne:Init()
       AddEvent(Events.OnBasicAttack, function(...) self:OnProcessAutoAttack(...) end)
       AddEvent(Events.OnBuffGain, function(Obj, Buff) self:OnBuffGain(Obj, Buff) end)
       AddEvent(Events.OnBuffLost, function(Obj, Buff) self:OnBuffLost(Obj, Buff) end)
+      Orbwalker:OnPostAttack(function(...) self:OnPostAttack(... ) end)
 
   PrintChat("<b><font color=\"#C70039\">Xida Vayne</font></b> <font color=\"#ffffff\">Loaded.</font>")
 end
@@ -81,17 +82,18 @@ function Vayne:OnTick()
         local targetPos = v.position
         local path = v.aiManagerClient.navPath
 
-        local positionAfter = targetPos + (targetPos - Vector(path[2])):normalized() * v.characterIntermediate.movementSpeed * 0.5
+        --local positionAfter = targetPos + (targetPos - Vector(path[2])):normalized() * v.characterIntermediate.movementSpeed * 0.5
+              
           for i = 15, 475, 75 do
 
              local posX = v.position.x + (v.position.x - myHero.position.x)
              local posY = v.position.y + (v.position.y - myHero.position.y)
              local posZ = v.position.z + (v.position.z - myHero.position.z)
              local pos = Vector(posX, posY, posZ):normalized() * i
-             local posTrue = D3DXVECTOR3(pos.x, pos.y, pos.z)
+             pos = D3DXVECTOR3(pos.x, pos.y, pos.z)
 
-              if self:IsWall(posTrue)  then
-                DrawHandler:Circle3D(posTrue, 100, 0xff00ffff)
+              if self:IsWall(pos)  then
+                  myHero.spellbook:CastSpell(SpellSlot.E, v.networkId)
               end
           end
       end
@@ -130,22 +132,22 @@ function Vayne:DelayAction(func, delay, args)
             delayedActions[time] = { { func = func, args = args } }
     end
 end
+function Vayne:OnPostAttack(args)
+  if args.Target then
 
+     if not self.Q.ready then return end
+      if IsKeyDown(harassKey) or IsKeyDown(comboKey) then
+        self:CastQ(args.Target)
+      end
+
+     if IsKeyDown(lasthitKey) or IsKeyDown(clearKey) then
+
+     end
+   end
+end
 function Vayne:OnProcessAutoAttack(sender,spell)
 
- if sender == myHero and spell and spell.target then
 
-    if not self.Q.ready then return end
-    if IsKeyDown(harassKey) or IsKeyDown(comboKey) then
-      local delay = math.min(60/1000, NetClient.ping/1000) + 0.35 - (0.0125 * myHero.experience.level)
-
-        self:DelayAction(function() self:CastQ(spell.target, true) end, delay)
-    end
-
-    if IsKeyDown(lasthitKey) or IsKeyDown(clearKey) then
-
-    end
-  end
 end
 
 function Vayne:CastQ(target, toEPosition)
@@ -173,7 +175,6 @@ function Vayne:CastQ(target, toEPosition)
 
 
   else]]if self:GetDistance(myPosition, targetPosition) > myHero.characterIntermediate.attackRange + 70 then
-     PrintChat("?????")
       tumblePosition = targetPosition
 
   elseif kitePos ~= nil then
@@ -187,7 +188,7 @@ end
 
 function Vayne:OnBuffGain(Obj, Buff)
 
-  if Obj.networkId ~= myHero.networkId or string.lower(Buff.name) ~= "vaynetumblefade" then return end
+  if Obj.networkId ~= myHero.networkId or Buff.name ~= "vaynetumblefade" then return end
   self.R.invis = true
   self.R.invisStartTick = GetTickCount()
 end
@@ -210,7 +211,6 @@ function Vayne:GetWallPosition(target, range)
 end
 
 function Vayne:GetKitePosition(target)
-
   local playerPos = myHero.position
   local tPos  = target.position
 
@@ -255,7 +255,7 @@ function Vayne:RotateAroundPoint(v1,v2, angle)
 end
 
 function Vayne:IsWall(pos)
-  flag = NavMesh:GetCollisionFlags(pos) -- <-- BROKEN? (BUGSPLATS)
+  flag = NavMesh:GetCollisionFlags(pos) 
   return flag == 2 or flag == 70
 end
 
